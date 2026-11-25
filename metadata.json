@@ -1,0 +1,6 @@
+{
+  "name": "ChronoCanvas",
+  "description": "Pixel Watch 3向けの拡張可能なホーム画面・時計スタイル・動画壁紙カスタマイズ＆バッテリー最適化コンパニオンアプリ",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

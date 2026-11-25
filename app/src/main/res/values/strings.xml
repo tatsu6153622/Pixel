@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">ChronoCanvas</string>
+    <string name="live_wallpaper_label">ChronoCanvas 動画壁紙拡張</string>
+    <string name="live_wallpaper_description">既存のシステム壁紙・Pixel Watch 3向けに最適化されたOLED省電力動画壁紙エンジン</string>
+    <string name="notification_listener_label">ChronoCanvas 通知連携</string>
+</resources>
