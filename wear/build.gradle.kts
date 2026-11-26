@@ -11,8 +11,8 @@ android {
     applicationId = "com.aistudio.chronocanvas.pw3studio"
     minSdk = 30
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.1"
+    versionCode = 4
+    versionName = "1.3"
   }
 
   signingConfigs {
@@ -57,5 +57,12 @@ dependencies {
   implementation(libs.androidx.media3.ui)
   implementation(libs.play.services.wearable)
   implementation(libs.androidx.wear.remote.interactions)
+  implementation(libs.androidx.wear)
+  implementation(libs.androidx.wear.ongoing)
+  implementation(libs.androidx.wear.tiles)
+  implementation(libs.androidx.wear.protolayout)
+  implementation(libs.androidx.wear.protolayout.material3)
+  implementation(libs.androidx.wear.protolayout.expression)
+  implementation(libs.androidx.wear.watchface.complications)
   implementation(libs.kotlinx.coroutines.android)
 }

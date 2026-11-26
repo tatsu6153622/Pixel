@@ -8,6 +8,7 @@ import com.aistudio.chronocanvas.shared.model.ClockStyleConfig
 import com.aistudio.chronocanvas.shared.model.ClockStyleId
 import com.aistudio.chronocanvas.shared.model.CustomWidgetExtension
 import com.aistudio.chronocanvas.shared.model.DateDisplayFormat
+import com.aistudio.chronocanvas.shared.model.LauncherSettingsConfig
 import com.aistudio.chronocanvas.shared.model.NotificationAlertConfig
 import com.aistudio.chronocanvas.shared.model.NotificationEdgeStyle
 import com.aistudio.chronocanvas.shared.model.ShaderPresetId
@@ -24,7 +25,7 @@ import com.aistudio.chronocanvas.shared.model.WidgetSlotPosition
 
 object WatchConfigCodec {
 
-  const val SCHEMA_VERSION = 2
+  const val SCHEMA_VERSION = 4
 
   fun toJson(config: WatchHomeConfig, pretty: Boolean = false): String {
     val root = linkedMapOf<String, Any?>(
@@ -39,6 +40,7 @@ object WatchConfigCodec {
         "accentColorHex" to config.clockStyle.accentColorHex,
         "secondaryColorHex" to config.clockStyle.secondaryColorHex,
         "hourTextColorHex" to config.clockStyle.hourTextColorHex,
+        "dateTextColorHex" to config.clockStyle.dateTextColorHex,
         "showSeconds" to config.clockStyle.showSeconds,
         "smoothSweepSeconds" to config.clockStyle.smoothSweepSeconds,
         "use24Hour" to config.clockStyle.use24Hour,
@@ -94,6 +96,12 @@ object WatchConfigCodec {
         "edgeGlowThicknessDp" to config.notificationAlert.edgeGlowThicknessDp.toDouble(),
         "glowWhileUnread" to config.notificationAlert.glowWhileUnread,
         "flashDurationSec" to config.notificationAlert.flashDurationSec,
+      ),
+      "launcherSettings" to linkedMapOf(
+        "keepAliveHomeMode" to config.launcherSettings.keepAliveHomeMode,
+        "ambientAlwaysOnEnabled" to config.launcherSettings.ambientAlwaysOnEnabled,
+        "autoLaunchOnBoot" to config.launcherSettings.autoLaunchOnBoot,
+        "showOngoingWatchBadge" to config.launcherSettings.showOngoingWatchBadge,
       ),
       "widgetSlots" to config.widgetSlots.map { slot ->
         linkedMapOf(
@@ -156,6 +164,7 @@ object WatchConfigCodec {
     val wpObj = root["wallpaper"] as? Map<String, Any?>
     val autoObj = root["wallpaperAutomation"] as? Map<String, Any?>
     val notifObj = root["notificationAlert"] as? Map<String, Any?>
+    val launcherObj = root["launcherSettings"] as? Map<String, Any?>
     val batObj = root["battery"] as? Map<String, Any?>
 
     val slots = (root["widgetSlots"] as? List<*>)?.mapNotNull { item ->
@@ -230,6 +239,7 @@ object WatchConfigCodec {
           accentColorHex = clockObj.long("accentColorHex", 0xFF3EF0D0),
           secondaryColorHex = clockObj.long("secondaryColorHex", 0xFFFFB84D),
           hourTextColorHex = clockObj.long("hourTextColorHex", 0xFFFFFFFF),
+          dateTextColorHex = clockObj.long("dateTextColorHex", 0xFFD0DAE8),
           showSeconds = clockObj.bool("showSeconds", true),
           smoothSweepSeconds = clockObj.bool("smoothSweepSeconds", true),
           use24Hour = clockObj.bool("use24Hour", true),
@@ -289,6 +299,16 @@ object WatchConfigCodec {
         )
       } else {
         NotificationAlertConfig()
+      },
+      launcherSettings = if (launcherObj != null) {
+        LauncherSettingsConfig(
+          keepAliveHomeMode = launcherObj.bool("keepAliveHomeMode", true),
+          ambientAlwaysOnEnabled = launcherObj.bool("ambientAlwaysOnEnabled", true),
+          autoLaunchOnBoot = launcherObj.bool("autoLaunchOnBoot", true),
+          showOngoingWatchBadge = launcherObj.bool("showOngoingWatchBadge", true),
+        )
+      } else {
+        LauncherSettingsConfig()
       },
       widgetSlots = slots.ifEmpty { WatchHomeConfig.defaultWidgetSlots() },
       appDockShortcuts = dock.ifEmpty { WatchHomeConfig.defaultAppDockShortcuts() },

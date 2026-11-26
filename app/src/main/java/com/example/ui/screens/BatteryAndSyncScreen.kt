@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Sync
@@ -54,7 +56,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aistudio.chronocanvas.shared.codec.WatchConfigCodec
@@ -76,8 +80,10 @@ fun BatteryAndSyncScreen(
 ) {
   var showPayloadDialog by remember { mutableStateOf(false) }
   var customReleaseUrlInput by remember { mutableStateOf("") }
+  val clipboard = LocalClipboardManager.current
   val report = uiState.powerReport
   val bat = uiState.activeConfig.battery
+  val launcherCfg = uiState.activeConfig.launcherSettings
 
   LazyColumn(
     modifier = modifier.fillMaxSize(),
@@ -549,6 +555,118 @@ fun BatteryAndSyncScreen(
               Icon(Icons.Rounded.OpenInNew, contentDescription = "Watchで開く", modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
               Text("Watchへ")
+            }
+          }
+        }
+      }
+    }
+
+    // 4.5. Watch Always-On Launcher & Power-On Home Mode
+    item {
+      Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)),
+        modifier = Modifier.fillMaxWidth(),
+      ) {
+        Column(
+          modifier = Modifier.padding(16.dp),
+          verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Home,
+              contentDescription = null,
+              tint = MaterialTheme.colorScheme.primary,
+            )
+            Text("Watchランチャー・電源ON常駐設定", style = MaterialTheme.typography.titleMedium)
+          }
+
+          BatterySwitchRow(
+            title = "常駐ホームモード (画面消灯→点灯で自動復帰)",
+            subtitle = "Watch上でOngoingActivityを維持し、スリープ後もシステム文字盤に戻さず壁紙を表示します",
+            checked = launcherCfg.keepAliveHomeMode,
+            onCheckedChange = { viewModel.updateLauncherSettings(keepAliveHomeMode = it) },
+          )
+          BatterySwitchRow(
+            title = "AOD常時表示待機 (Ambiactive)",
+            subtitle = "腕を下げた時に省電力AOD時計へ切替え、腕上げ/電源ボタンで瞬時に動画壁紙へ復帰します",
+            checked = launcherCfg.ambientAlwaysOnEnabled,
+            onCheckedChange = { viewModel.updateLauncherSettings(ambientAlwaysOnEnabled = it) },
+          )
+          BatterySwitchRow(
+            title = "時計の電源ON / 再起動時にホーム復帰",
+            subtitle = "起動時にランチャー自動復帰または1タップ起動カードを表示します",
+            checked = launcherCfg.autoLaunchOnBoot,
+            onCheckedChange = { viewModel.updateLauncherSettings(autoLaunchOnBoot = it) },
+          )
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            Button(
+              onClick = viewModel::launchWatchHomeFromPhone,
+              modifier = Modifier
+                .weight(1f)
+                .testTag("launch_watch_home_button"),
+            ) {
+              Icon(Icons.Rounded.Home, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Watchで今すぐホーム表示")
+            }
+          }
+
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            val adbHomeCmd =
+              "adb shell cmd package set-home-activity com.aistudio.chronocanvas.pw3studio/com.aistudio.chronocanvas.wear.WatchHomeActivity"
+            Column(
+              modifier = Modifier.padding(12.dp),
+              verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+              Text(
+                text = "電源を入れた瞬間から表示させる設定ガイド",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+              )
+              Text(
+                text = "• 通常利用（PC不要）: Watchで「ChronoCanvas Watch」を開き通知を許可すると、以降は画面を消して再点灯してもずっとこの壁紙のまま使えます。\n" +
+                  "• タイル / 文字盤ショートカット: Watchをスワイプして「ChronoCanvas ホーム」タイルを追加、または文字盤コンプリケーションに「ChronoCanvas 起動」を置くと1操作で開けます。\n" +
+                  "• 完全ランチャー化（再起動直後から表示）: Wear OS 5では設定画面からホームアプリを選べないため、PCと接続して以下のコマンドを実行すると標準ホーム自体を切り替えられます。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Text(
+                  text = adbHomeCmd,
+                  fontFamily = JetBrainsMonoFamily,
+                  style = MaterialTheme.typography.labelSmall,
+                  color = MaterialTheme.colorScheme.secondary,
+                  modifier = Modifier.weight(1f).padding(end = 8.dp),
+                )
+                OutlinedButton(
+                  onClick = {
+                    clipboard.setText(AnnotatedString(adbHomeCmd))
+                    viewModel.showMessage("ADBホーム切替コマンドをコピーしました")
+                  },
+                ) {
+                  Icon(Icons.Rounded.ContentCopy, contentDescription = "コマンドをコピー", modifier = Modifier.size(14.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text("コピー")
+                }
+              }
             }
           }
         }

@@ -54,6 +54,21 @@ object DocumentationContent {
       actionLabel = "同期・アップデートセンターへ",
     ),
     GuideSection(
+      id = "launcher_always_on",
+      category = "Watch同期",
+      title = "電源ON・画面点灯でいつも壁紙ホームを表示する（ランチャー常駐化）",
+      summary = "AOD・OngoingActivity・タイル・コンプリケーション・HOMEランチャー登録により、アプリを開き直さず常に表示できます。",
+      steps = listOf(
+        "1. 【常駐ホーム + AOD（推奨・設定簡単）】Watchで一度ChronoCanvas Watchを開き通知を許可すると、AmbientLifecycleObserver と OngoingActivity により、画面消灯後もシステム文字盤に戻らず電源ボタン/腕上げで即座に動画壁紙へ復帰します。",
+        "2. 【1スワイプ・1タップ起動】Pixel Watch 3のタイル追加画面で『ChronoCanvas ホーム』を追加、または既存文字盤のコンプリケーションに『ChronoCanvas 起動』を登録すると、システム文字盤から1操作で戻れます。",
+        "3. 【Watchアプリ一覧ドック】右下のアプリボタンからPixel Watch 3にインストール済みの他アプリもそのまま起動できます。",
+        "4. 【完全ホームランチャー化（上級）】再起動直後から標準ランチャーの代わりに起動したい場合は、PCから adb shell cmd package set-home-activity com.aistudio.chronocanvas.pw3studio/com.aistudio.chronocanvas.wear.WatchHomeActivity を実行します。",
+      ),
+      technicalNote = "Wear OS 5は標準設定画面にデフォルトホームアプリ切替UIを持ちませんが、OngoingActivity＋AOD常駐により通常利用ではほぼ常時ホームとして機能します。",
+      targetTab = StudioTab.BATTERY_SYNC,
+      actionLabel = "ランチャー設定を開く",
+    ),
+    GuideSection(
       id = "clock_and_extensibility",
       category = "時計・拡張API",
       title = "時計・ウィジェット自由配置・非表示（「なし」）設定",

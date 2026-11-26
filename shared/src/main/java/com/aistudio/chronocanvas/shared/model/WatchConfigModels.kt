@@ -70,6 +70,7 @@ data class ClockStyleConfig(
   val accentColorHex: Long = 0xFF3EF0D0,
   val secondaryColorHex: Long = 0xFFFFB84D,
   val hourTextColorHex: Long = 0xFFFFFFFF,
+  val dateTextColorHex: Long = 0xFFD0DAE8,
   val showSeconds: Boolean = true,
   val smoothSweepSeconds: Boolean = true,
   val use24Hour: Boolean = true,
@@ -252,6 +253,13 @@ data class CustomWidgetExtension(
   val supportsAmbient: Boolean = true,
 )
 
+data class LauncherSettingsConfig(
+  val keepAliveHomeMode: Boolean = true,
+  val ambientAlwaysOnEnabled: Boolean = true,
+  val autoLaunchOnBoot: Boolean = true,
+  val showOngoingWatchBadge: Boolean = true,
+)
+
 data class WatchHomeConfig(
   val id: String = "active_config",
   val name: String = "Pixel Watch 3 Studio",
@@ -260,6 +268,7 @@ data class WatchHomeConfig(
   val wallpaper: WallpaperConfig = WallpaperConfig(),
   val wallpaperAutomation: WallpaperAutomationConfig = WallpaperAutomationConfig(),
   val notificationAlert: NotificationAlertConfig = NotificationAlertConfig(),
+  val launcherSettings: LauncherSettingsConfig = LauncherSettingsConfig(),
   val widgetSlots: List<WidgetSlotConfig> = defaultWidgetSlots(),
   val showAppDockButton: Boolean = true,
   val appDockShortcuts: List<AppDockShortcut> = defaultAppDockShortcuts(),

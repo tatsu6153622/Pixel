@@ -38,7 +38,9 @@ object SharedWatchPalette {
     "ソーラーコーラル" to 0xFFFF6B7A,
     "ネオンミント" to 0xFF5CF28E,
     "コスミックバイオレット" to 0xFF9E8CFF,
+    "アイスブルー" to 0xFF7AD7FF,
     "チタニウムホワイト" to 0xFFF2F6FA,
+    "ソフトスレート" to 0xFF9AA8BE,
   )
 }
 

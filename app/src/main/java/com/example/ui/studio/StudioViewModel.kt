@@ -1,7 +1,13 @@
 package com.example.ui.studio
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
+import android.os.BatteryManager
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.aistudio.chronocanvas.shared.battery.BatteryOptimizerEngine
@@ -29,6 +35,7 @@ import com.example.media.VideoExtensionTranscoder
 import com.example.media.VideoFileDetails
 import com.example.media.WatchVideoExtensionPackage
 import com.example.media.inspectVideoUri
+import com.example.notifications.ChronoNotificationListenerService
 import com.example.notifications.NotificationBridgeState
 import com.example.wearsync.WatchAppStatus
 import com.example.wearsync.WatchLiveBridgeState
@@ -61,6 +68,7 @@ data class StudioUiState(
   val isFullscreenWatchMode: Boolean = false,
   val previewHourOverride: Int? = null,
   val notificationAccessGranted: Boolean = false,
+  val notificationListenerConnected: Boolean = false,
   val selectedSlotForEdit: WidgetSlotPosition = WidgetSlotPosition.TOP_ARC,
   val savedPresets: List<WatchPresetEntity> = emptyList(),
   val syncLogs: List<SyncLogEntity> = emptyList(),
@@ -94,7 +102,36 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
   )
   val uiState: StateFlow<StudioUiState> = _uiState.asStateFlow()
 
+  private val batteryReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+      if (intent?.action != Intent.ACTION_BATTERY_CHANGED) return
+      val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+      val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+      val pct = if (level >= 0 && scale > 0) ((level * 100f) / scale).toInt().coerceIn(0, 100)
+      else repository.readPhoneBatteryPct()
+      if (pct != _uiState.value.telemetry.phoneBatteryPct) {
+        _uiState.update { state ->
+          state.copy(telemetry = state.telemetry.copy(phoneBatteryPct = pct))
+        }
+        viewModelScope.launch {
+          val t = _uiState.value.telemetry
+          repository.pushTelemetryToWatch(t.unreadNotificationCount, t.lastNotificationPulseMs, pct)
+        }
+      }
+    }
+  }
+
   init {
+    NotificationBridgeState.initialize(application)
+    runCatching {
+      ContextCompat.registerReceiver(
+        application,
+        batteryReceiver,
+        IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+        ContextCompat.RECEIVER_NOT_EXPORTED,
+      )
+    }
+    ChronoNotificationListenerService.requestRebindIfNeeded(application)
     viewModelScope.launch {
       repository.seedBuiltInPresetsIfNeeded()
     }
@@ -119,19 +156,26 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
       }
     }
     viewModelScope.launch {
+      NotificationBridgeState.isListenerConnected.collectLatest { connected ->
+        _uiState.update { it.copy(notificationListenerConnected = connected) }
+      }
+    }
+    viewModelScope.launch {
       combine(
         NotificationBridgeState.unreadCount,
         NotificationBridgeState.lastPulseMs,
       ) { count, pulseMs -> count to pulseMs }.collectLatest { (count, pulseMs) ->
+        val batPct = repository.readPhoneBatteryPct()
         _uiState.update { state ->
           state.copy(
             telemetry = state.telemetry.copy(
+              phoneBatteryPct = batPct,
               unreadNotificationCount = count,
               lastNotificationPulseMs = pulseMs,
             ),
           )
         }
-        repository.pushNotificationTelemetry(count, pulseMs)
+        repository.pushTelemetryToWatch(count, pulseMs, batPct)
       }
     }
     viewModelScope.launch {
@@ -158,6 +202,12 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
       }
     }
     refreshWearNodes()
+    syncLiveTelemetryNow()
+  }
+
+  override fun onCleared() {
+    runCatching { getApplication<Application>().unregisterReceiver(batteryReceiver) }
+    super.onCleared()
   }
 
   private fun updateConfig(transform: (WatchHomeConfig) -> WatchHomeConfig) {
@@ -194,8 +244,23 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
   }
 
   fun refreshNotificationPermissionStatus() {
-    val granted = NotificationBridgeState.isNotificationAccessEnabled(getApplication())
+    val app = getApplication<Application>()
+    val granted = NotificationBridgeState.isNotificationAccessEnabled(app)
     _uiState.update { it.copy(notificationAccessGranted = granted) }
+    if (granted) {
+      ChronoNotificationListenerService.requestRebindIfNeeded(app)
+    }
+  }
+
+  fun syncLiveTelemetryNow() {
+    val app = getApplication<Application>()
+    val batPct = repository.readPhoneBatteryPct()
+    _uiState.update { state ->
+      state.copy(telemetry = state.telemetry.copy(phoneBatteryPct = batPct))
+    }
+    viewModelScope.launch {
+      ChronoNotificationListenerService.syncCurrentActiveNotificationsToWatch(app)
+    }
   }
 
   fun setWatchModel(model: WatchModelSpec) {
@@ -231,12 +296,14 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
   }
 
   fun triggerTestNotificationPulse() {
+    val app = getApplication<Application>()
     val nextCount = (_uiState.value.telemetry.unreadNotificationCount + 1).coerceAtMost(99)
-    val now = System.currentTimeMillis()
-    NotificationBridgeState.updateFromSystem(nextCount, triggerPulse = true)
+    val now = NotificationBridgeState.updateFromSystem(nextCount, triggerPulse = true, context = app)
+    val batPct = repository.readPhoneBatteryPct()
     _uiState.update {
       it.copy(
         telemetry = it.telemetry.copy(
+          phoneBatteryPct = batPct,
           unreadNotificationCount = nextCount,
           lastNotificationPulseMs = now,
         ),
@@ -244,19 +311,25 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
       )
     }
     viewModelScope.launch {
-      repository.pushNotificationTelemetry(nextCount, now)
+      repository.pushTelemetryToWatch(nextCount, now, batPct)
     }
   }
 
   fun clearNotificationsPreview() {
-    NotificationBridgeState.updateFromSystem(0, triggerPulse = false)
+    val app = getApplication<Application>()
+    NotificationBridgeState.updateFromSystem(0, triggerPulse = false, context = app)
+    val batPct = repository.readPhoneBatteryPct()
     _uiState.update {
       it.copy(
-        telemetry = it.telemetry.copy(unreadNotificationCount = 0, lastNotificationPulseMs = 0L),
+        telemetry = it.telemetry.copy(
+          phoneBatteryPct = batPct,
+          unreadNotificationCount = 0,
+          lastNotificationPulseMs = 0L,
+        ),
       )
     }
     viewModelScope.launch {
-      repository.pushNotificationTelemetry(0, 0L)
+      repository.pushTelemetryToWatch(0, 0L, batPct)
     }
   }
 
@@ -279,6 +352,10 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
 
   fun setClockHourColor(hex: Long) {
     updateConfig { it.copy(clockStyle = it.clockStyle.copy(hourTextColorHex = hex)) }
+  }
+
+  fun setClockDateColor(hex: Long) {
+    updateConfig { it.copy(clockStyle = it.clockStyle.copy(dateTextColorHex = hex)) }
   }
 
   fun setClockScale(scale: Float) {
@@ -740,6 +817,34 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
     showMessage(
       if (enabled) "スマホ連携OTA自動反映をONにしました" else "OTA自動反映をOFFにしました",
     )
+  }
+
+  fun updateLauncherSettings(
+    keepAliveHomeMode: Boolean? = null,
+    ambientAlwaysOnEnabled: Boolean? = null,
+    autoLaunchOnBoot: Boolean? = null,
+    showOngoingWatchBadge: Boolean? = null,
+  ) {
+    updateConfig { cfg ->
+      val cur = cfg.launcherSettings
+      cfg.copy(
+        launcherSettings = cur.copy(
+          keepAliveHomeMode = keepAliveHomeMode ?: cur.keepAliveHomeMode,
+          ambientAlwaysOnEnabled = ambientAlwaysOnEnabled ?: cur.ambientAlwaysOnEnabled,
+          autoLaunchOnBoot = autoLaunchOnBoot ?: cur.autoLaunchOnBoot,
+          showOngoingWatchBadge = showOngoingWatchBadge ?: cur.showOngoingWatchBadge,
+        ),
+      )
+    }
+  }
+
+  fun launchWatchHomeFromPhone() {
+    viewModelScope.launch {
+      refreshWearNodes()
+      repository.sendLaunchHomeToWatch()
+        .onSuccess { showMessage(it) }
+        .onFailure { showMessage(it.localizedMessage ?: "Watch起動コマンド送信失敗") }
+    }
   }
 
   fun forceRefreshWatchUi() {

@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="wear_app_name">ChronoCanvas Watch</string>
+    <string name="tile_launcher_label">ChronoCanvas ホーム</string>
+    <string name="tile_launcher_description">設定した動画壁紙・時計・ウィジェットのカスタムホーム画面をすぐに開きます。</string>
+    <string name="complication_launcher_label">ChronoCanvas 起動</string>
 </resources>

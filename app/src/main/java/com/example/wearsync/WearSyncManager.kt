@@ -7,6 +7,8 @@ import androidx.wear.remote.interactions.RemoteActivityHelper
 import com.aistudio.chronocanvas.shared.codec.WatchConfigCodec
 import com.aistudio.chronocanvas.shared.model.WallpaperSourceType
 import com.aistudio.chronocanvas.shared.model.WatchHomeConfig
+import com.example.notifications.NotificationBridgeState
+import com.example.notifications.PhoneTelemetryHelper
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.tasks.Task
@@ -57,10 +59,14 @@ class WearSyncManager(private val context: Context) {
     const val PATH_VIDEO_OFFWRIST = "/chronocanvas/video_offwrist"
     const val PATH_NOTIFICATIONS = "/chronocanvas/notifications"
     const val PATH_NOTIFICATION_PULSE = "/chronocanvas/notification_pulse"
+    const val PATH_TELEMETRY = "/chronocanvas/telemetry"
+    const val PATH_TELEMETRY_SYNC = "/chronocanvas/telemetry_sync"
+    const val PATH_REQUEST_TELEMETRY = "/chronocanvas/request_telemetry"
     const val PATH_WATCH_STATUS = "/chronocanvas/watch_status"
     const val PATH_WATCH_STATUS_REPLY = "/chronocanvas/watch_status_reply"
     const val PATH_REQUEST_STATUS = "/chronocanvas/request_status"
     const val PATH_FORCE_REFRESH = "/chronocanvas/force_refresh"
+    const val PATH_LAUNCH_HOME = "/chronocanvas/launch_home"
   }
 
   private var lastSyncedMainVideoUri: String? = null
@@ -158,6 +164,23 @@ class WearSyncManager(private val context: Context) {
     }
   }
 
+  suspend fun sendLaunchHomeToWatch(): Result<String> = withContext(Dispatchers.IO) {
+    if (!isPlayServicesWearableAvailable()) {
+      return@withContext Result.failure(IllegalStateException("Wear OS Data Layerが利用できません"))
+    }
+    return@withContext runCatching {
+      val (_, nodes) = scanConnectedNodes()
+      if (nodes.isEmpty()) {
+        throw IllegalStateException("接続中のPixel Watch 3が見つかりません")
+      }
+      val msgClient = Wearable.getMessageClient(context)
+      nodes.forEach { node ->
+        msgClient.sendMessage(node.id, PATH_LAUNCH_HOME, ByteArray(0)).awaitTask()
+      }
+      "Pixel Watch 3側へChronoCanvasホーム起動を送信しました"
+    }
+  }
+
   suspend fun launchRemoteWatchUpdate(
     nodeId: String? = null,
     customReleaseUrl: String? = null,
@@ -204,21 +227,46 @@ class WearSyncManager(private val context: Context) {
     }
   }
 
-  suspend fun pushNotificationTelemetry(unreadCount: Int, pulseMs: Long) = withContext(Dispatchers.IO) {
+  suspend fun pushNotificationTelemetry(unreadCount: Int, pulseMs: Long) {
+    pushTelemetryToWatch(
+      unreadCount = unreadCount,
+      pulseMs = pulseMs,
+      phoneBatteryPct = PhoneTelemetryHelper.readPhoneBatteryPct(context),
+    )
+  }
+
+  suspend fun pushTelemetryToWatch(
+    unreadCount: Int,
+    pulseMs: Long,
+    phoneBatteryPct: Int,
+  ) = withContext(Dispatchers.IO) {
     if (!isPlayServicesWearableAvailable()) return@withContext
     runCatching {
+      val now = System.currentTimeMillis()
+      val safeUnread = unreadCount.coerceAtLeast(0)
+      val safeBat = phoneBatteryPct.coerceIn(0, 100)
+
+      val telemetryReq = PutDataMapRequest.create(PATH_TELEMETRY).apply {
+        dataMap.putInt("unread_count", safeUnread)
+        dataMap.putLong("pulse_ms", pulseMs)
+        dataMap.putInt("phone_battery_pct", safeBat)
+        dataMap.putLong("timestamp_ms", now)
+      }.asPutDataRequest().setUrgent()
+      Wearable.getDataClient(context).putDataItem(telemetryReq).awaitTask()
+
+      val notifReq = PutDataMapRequest.create(PATH_NOTIFICATIONS).apply {
+        dataMap.putInt("unread_count", safeUnread)
+        dataMap.putLong("pulse_ms", pulseMs)
+        dataMap.putLong("timestamp_ms", now)
+      }.asPutDataRequest().setUrgent()
+      Wearable.getDataClient(context).putDataItem(notifReq).awaitTask()
+
       val (_, nodes) = scanConnectedNodes()
       if (nodes.isEmpty()) return@withContext
-      val putReq = PutDataMapRequest.create(PATH_NOTIFICATIONS).apply {
-        dataMap.putInt("unread_count", unreadCount)
-        dataMap.putLong("pulse_ms", pulseMs)
-      }.asPutDataRequest().setUrgent()
-      Wearable.getDataClient(context).putDataItem(putReq).awaitTask()
-
-      val payload = "$unreadCount:$pulseMs".toByteArray(Charsets.UTF_8)
+      val payload = "$safeUnread|$pulseMs|$safeBat|$now".toByteArray(Charsets.UTF_8)
       val messageClient = Wearable.getMessageClient(context)
       nodes.forEach { node ->
-        runCatching { messageClient.sendMessage(node.id, PATH_NOTIFICATION_PULSE, payload).awaitTask() }
+        runCatching { messageClient.sendMessage(node.id, PATH_TELEMETRY_SYNC, payload).awaitTask() }
       }
     }
   }
@@ -293,6 +341,14 @@ class WearSyncManager(private val context: Context) {
       }
 
       val primary = nodes.first()
+      runCatching {
+        NotificationBridgeState.initialize(context)
+        pushTelemetryToWatch(
+          unreadCount = NotificationBridgeState.unreadCount.value,
+          pulseMs = NotificationBridgeState.lastPulseMs.value,
+          phoneBatteryPct = PhoneTelemetryHelper.readPhoneBatteryPct(context),
+        )
+      }
       WearSyncResult.SyncedToWatch(
         nodeCount = nodes.size,
         primaryNodeName = primary.displayName,

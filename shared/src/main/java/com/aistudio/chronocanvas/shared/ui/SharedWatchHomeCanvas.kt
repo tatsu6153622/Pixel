@@ -200,6 +200,7 @@ fun SharedWatchHomeCanvas(
   val rawAccent = Color(config.clockStyle.accentColorHex)
   val rawSecondary = Color(config.clockStyle.secondaryColorHex)
   val rawHourColor = Color(config.clockStyle.hourTextColorHex)
+  val rawDateColor = Color(config.clockStyle.dateTextColorHex)
   val accentColor = if (isAmbientMode && config.clockStyle.ambientMonochrome) {
     Color(0xFFB5C0CE)
   } else {
@@ -214,6 +215,11 @@ fun SharedWatchHomeCanvas(
     Color(0xFFD0D8E2)
   } else {
     rawHourColor
+  }
+  val dateColor = if (isAmbientMode && config.clockStyle.ambientMonochrome) {
+    Color(0xFFA0ACBC)
+  } else {
+    rawDateColor
   }
 
   val clockWeight = when (config.clockStyle.fontWeight) {
@@ -336,15 +342,19 @@ fun SharedWatchHomeCanvas(
             minute = minute,
             second = second,
             milli = milli,
+            dateText = dateText,
             smoothSweep = config.clockStyle.smoothSweepSeconds && !isAmbientMode,
             showSeconds = config.clockStyle.showSeconds && !isAmbientMode,
             tickStyle = config.clockStyle.tickStyle,
             accentColor = accentColor,
             secondaryColor = secondaryColor,
             handColor = hourColor,
+            dateColor = dateColor,
             isAmbient = isAmbientMode,
             scale = config.clockStyle.clockScale,
             clockOffset = clockOffset,
+            dateYOffsetPx = (screenPx * 0.14f * config.clockStyle.clockScale).roundToInt(),
+            monoFont = monoFontFamily,
           )
 
           ClockStyleId.ORBIT_DIGITAL -> OrbitDigitalClockLayer(
@@ -359,6 +369,7 @@ fun SharedWatchHomeCanvas(
             accentColor = accentColor,
             secondaryColor = secondaryColor,
             hourColor = hourColor,
+            dateColor = dateColor,
             isAmbient = isAmbientMode,
             scale = config.clockStyle.clockScale,
             fontWeight = clockWeight,
@@ -374,6 +385,7 @@ fun SharedWatchHomeCanvas(
             use24Hour = config.clockStyle.use24Hour,
             accentColor = accentColor,
             hourColor = hourColor,
+            dateColor = dateColor,
             isAmbient = isAmbientMode,
             scale = config.clockStyle.clockScale,
             fontWeight = clockWeight,
@@ -394,6 +406,7 @@ fun SharedWatchHomeCanvas(
             accentColor = accentColor,
             secondaryColor = secondaryColor,
             hourColor = hourColor,
+            dateColor = dateColor,
             isAmbient = isAmbientMode,
             scale = config.clockStyle.clockScale,
             fontWeight = clockWeight,
@@ -702,21 +715,39 @@ private fun AnalogClockLayer(
   minute: Int,
   second: Int,
   milli: Int,
+  dateText: String?,
   smoothSweep: Boolean,
   showSeconds: Boolean,
   tickStyle: TickStyle,
   accentColor: Color,
   secondaryColor: Color,
   handColor: Color,
+  dateColor: Color,
   isAmbient: Boolean,
   scale: Float,
   clockOffset: IntOffset,
+  dateYOffsetPx: Int,
+  monoFont: FontFamily,
 ) {
-  Canvas(
-    modifier = Modifier
-      .fillMaxSize()
-      .offset { clockOffset },
-  ) {
+  Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    if (dateText != null) {
+      Text(
+        text = dateText,
+        color = dateColor.copy(alpha = if (isAmbient) 0.65f else 0.92f),
+        fontFamily = monoFont,
+        fontSize = (9.5f * scale).sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = 1.sp,
+        modifier = Modifier.offset {
+          IntOffset(clockOffset.x, clockOffset.y + dateYOffsetPx)
+        },
+      )
+    }
+    Canvas(
+      modifier = Modifier
+        .fillMaxSize()
+        .offset { clockOffset },
+    ) {
     val radius = (size.minDimension * 0.45f) * scale.coerceIn(0.65f, 1.3f)
     if (tickStyle != TickStyle.NONE) {
       val count = when (tickStyle) {
@@ -779,6 +810,7 @@ private fun AnalogClockLayer(
 
     drawCircle(color = accentColor, radius = 6f, center = center)
     drawCircle(color = Color.Black, radius = 2.5f, center = center)
+    }
   }
 }
 
@@ -795,6 +827,7 @@ private fun OrbitDigitalClockLayer(
   accentColor: Color,
   secondaryColor: Color,
   hourColor: Color,
+  dateColor: Color,
   isAmbient: Boolean,
   scale: Float,
   fontWeight: FontWeight,
@@ -841,7 +874,7 @@ private fun OrbitDigitalClockLayer(
       if (dateText != null) {
         Text(
           text = dateText,
-          color = accentColor.copy(alpha = if (isAmbient) 0.65f else 0.92f),
+          color = dateColor.copy(alpha = if (isAmbient) 0.65f else 0.95f),
           fontFamily = monoFont,
           fontSize = (10.5f * scale).sp,
           fontWeight = FontWeight.Medium,
@@ -878,6 +911,7 @@ private fun ModularMinimalClockLayer(
   use24Hour: Boolean,
   accentColor: Color,
   hourColor: Color,
+  dateColor: Color,
   isAmbient: Boolean,
   scale: Float,
   fontWeight: FontWeight,
@@ -917,7 +951,7 @@ private fun ModularMinimalClockLayer(
       if (dateText != null) {
         Text(
           text = dateText,
-          color = Color(0xFF9AA8BE),
+          color = dateColor.copy(alpha = if (isAmbient) 0.65f else 0.95f),
           fontFamily = monoFont,
           fontSize = (9.5f * scale).sp,
         )
@@ -938,6 +972,7 @@ private fun DataMatrixClockLayer(
   accentColor: Color,
   secondaryColor: Color,
   hourColor: Color,
+  dateColor: Color,
   isAmbient: Boolean,
   scale: Float,
   fontWeight: FontWeight,
@@ -967,7 +1002,7 @@ private fun DataMatrixClockLayer(
           if (dateText != null) {
             Text(
               text = dateText,
-              color = Color(0xFF9AA8BE),
+              color = dateColor.copy(alpha = if (isAmbient) 0.65f else 0.95f),
               fontFamily = monoFont,
               fontSize = (9 * scale).sp,
             )

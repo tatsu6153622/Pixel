@@ -12,6 +12,7 @@ object WatchStatusReporter {
 
   const val PATH_WATCH_STATUS = "/chronocanvas/watch_status"
   const val PATH_WATCH_STATUS_REPLY = "/chronocanvas/watch_status_reply"
+  const val PATH_REQUEST_TELEMETRY = "/chronocanvas/request_telemetry"
 
   suspend fun publishStatusToPhone(context: Context) = withContext(Dispatchers.IO) {
     runCatching {
@@ -37,6 +38,19 @@ object WatchStatusReporter {
           val msgClient = Wearable.getMessageClient(context)
           nodes.forEach { node ->
             msgClient.sendMessage(node.id, PATH_WATCH_STATUS_REPLY, payload)
+            msgClient.sendMessage(node.id, PATH_REQUEST_TELEMETRY, ByteArray(0))
+          }
+        }
+    }
+  }
+
+  suspend fun requestTelemetryFromPhone(context: Context) = withContext(Dispatchers.IO) {
+    runCatching {
+      Wearable.getNodeClient(context).connectedNodes
+        .addOnSuccessListener { nodes ->
+          val msgClient = Wearable.getMessageClient(context)
+          nodes.forEach { node ->
+            msgClient.sendMessage(node.id, PATH_REQUEST_TELEMETRY, ByteArray(0))
           }
         }
     }

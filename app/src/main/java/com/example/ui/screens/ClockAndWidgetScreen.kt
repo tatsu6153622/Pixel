@@ -226,6 +226,17 @@ fun ClockAndWidgetScreen(
             tagPrefix = "hour_swatch",
           )
 
+          Text(
+            text = "日付（何月何日）文字カラー",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          ColorSwatchRow(
+            selectedHex = clock.dateTextColorHex,
+            onSelect = viewModel::setClockDateColor,
+            tagPrefix = "date_swatch",
+          )
+
           Text("フォントの太さ", style = MaterialTheme.typography.bodySmall)
           FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ClockFontWeightLevel.entries.forEach { fw ->
@@ -372,21 +383,28 @@ fun ClockAndWidgetScreen(
             ) {
               Column(modifier = Modifier.weight(1f)) {
                 Text(
-                  text = if (uiState.notificationAccessGranted) {
-                    "OS通知アクセス許可済み（未読 ${uiState.telemetry.unreadNotificationCount}件）"
-                  } else {
-                    "未読件数の自動取得には「通知へのアクセス」許可が必要です"
+                  text = when {
+                    uiState.notificationAccessGranted && uiState.notificationListenerConnected ->
+                      "OS通知リスナー稼働中（未読 ${uiState.telemetry.unreadNotificationCount}件）"
+                    uiState.notificationAccessGranted ->
+                      "通知アクセス許可済み・サービス再接続待ち（未読 ${uiState.telemetry.unreadNotificationCount}件）"
+                    else ->
+                      "未読件数の自動取得には「通知へのアクセス」許可が必要です"
                   },
                   style = MaterialTheme.typography.labelLarge,
                 )
                 Text(
-                  text = "通知が来るとウォッチの通知ウィジェット更新＋外周フレーム発光を同期します。",
+                  text = if (uiState.notificationAccessGranted) {
+                    "アプリを閉じていても通知変化とスマホ電池(${uiState.telemetry.phoneBatteryPct}%)をWatchへ自動送信します。"
+                  } else {
+                    "サイドロード版で設定が押せない時は「設定＞アプリ＞ChronoCanvas＞右上⋮＞制限付き設定を許可」を先にONにしてください。"
+                  },
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
               }
+              Spacer(modifier = Modifier.width(8.dp))
               if (!uiState.notificationAccessGranted) {
-                Spacer(modifier = Modifier.width(8.dp))
                 OutlinedButton(
                   onClick = {
                     val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
@@ -399,6 +417,19 @@ fun ClockAndWidgetScreen(
                   Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
                   Spacer(modifier = Modifier.width(4.dp))
                   Text("設定")
+                }
+              } else {
+                OutlinedButton(
+                  onClick = {
+                    viewModel.refreshNotificationPermissionStatus()
+                    viewModel.syncLiveTelemetryNow()
+                    viewModel.showMessage("通知・スマホ電池(${uiState.telemetry.phoneBatteryPct}%)をWatchへ再同期しました")
+                  },
+                  modifier = Modifier.testTag("resync_notification_telemetry_button"),
+                ) {
+                  Icon(Icons.Rounded.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text("再同期")
                 }
               }
             }
@@ -772,15 +803,16 @@ fun ClockAndWidgetScreen(
   }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ColorSwatchRow(
   selectedHex: Long,
   onSelect: (Long) -> Unit,
   tagPrefix: String,
 ) {
-  Row(
+  FlowRow(
     horizontalArrangement = Arrangement.spacedBy(10.dp),
-    verticalAlignment = Alignment.CenterVertically,
+    verticalArrangement = Arrangement.spacedBy(8.dp),
   ) {
     SharedWatchPalette.AccentSwatches.forEach { (label, hex) ->
       val isSelected = selectedHex == hex

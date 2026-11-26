@@ -216,10 +216,12 @@ object WatchExtensionRegistry {
       defaultRefreshSec = 120,
       supportsProgressRing = true,
     ) { slot, t ->
+      val pct = t.phoneBatteryPct
+      val hasValue = pct in 0..100
       WidgetResolvedDisplay(
         title = slot.customTitle?.takeIf { it.isNotBlank() } ?: "PHONE",
-        primaryValue = "${t.phoneBatteryPct}%",
-        progress = (t.phoneBatteryPct / 100f).coerceIn(0f, 1f),
+        primaryValue = if (hasValue) "$pct%" else "--%",
+        progress = if (hasValue) (pct / 100f).coerceIn(0f, 1f) else null,
         iconKey = "phone",
       )
     },

@@ -1,5 +1,6 @@
 package com.aistudio.chronocanvas.wear
 
+import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import com.google.android.gms.wearable.ChannelClient
@@ -32,14 +33,34 @@ class WatchConfigSyncService : WearableListenerService() {
             val json = dataMap.getString("config_json")
             if (!json.isNullOrBlank()) {
               WatchLocalStore.saveConfigJson(applicationContext, json)
+              WatchLauncherService.syncServiceState(
+                applicationContext,
+                WatchLocalStore.configState.value.launcherSettings.keepAliveHomeMode,
+              )
               scope.launch { WatchStatusReporter.publishStatusToPhone(applicationContext) }
             }
+          }
+          "/chronocanvas/telemetry" -> {
+            val dataMap = DataMapItem.fromDataItem(event.dataItem).dataMap
+            val count = dataMap.getInt("unread_count", 0)
+            val pulseMs = dataMap.getLong("pulse_ms", 0L)
+            val phoneBat = dataMap.getInt("phone_battery_pct", -1).takeIf { it in 0..100 }
+            WatchLocalStore.updateNotificationTelemetry(
+              unreadCount = count,
+              pulseMs = pulseMs,
+              context = applicationContext,
+              phoneBatteryPct = phoneBat,
+            )
           }
           "/chronocanvas/notifications" -> {
             val dataMap = DataMapItem.fromDataItem(event.dataItem).dataMap
             val count = dataMap.getInt("unread_count", 0)
             val pulseMs = dataMap.getLong("pulse_ms", 0L)
-            WatchLocalStore.updateNotificationTelemetry(count, pulseMs)
+            WatchLocalStore.updateNotificationTelemetry(
+              unreadCount = count,
+              pulseMs = pulseMs,
+              context = applicationContext,
+            )
           }
         }
       }
@@ -52,21 +73,62 @@ class WatchConfigSyncService : WearableListenerService() {
         val json = String(messageEvent.data, Charsets.UTF_8)
         if (json.isNotBlank()) {
           WatchLocalStore.saveConfigJson(applicationContext, json)
+          WatchLauncherService.syncServiceState(
+            applicationContext,
+            WatchLocalStore.configState.value.launcherSettings.keepAliveHomeMode,
+          )
           scope.launch { WatchStatusReporter.publishStatusToPhone(applicationContext) }
         }
+      }
+      "/chronocanvas/telemetry_sync" -> {
+        val parts = String(messageEvent.data, Charsets.UTF_8).split("|")
+        val count = parts.getOrNull(0)?.toIntOrNull() ?: 0
+        val pulseMs = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+        val phoneBat = parts.getOrNull(2)?.toIntOrNull()?.takeIf { it in 0..100 }
+        WatchLocalStore.updateNotificationTelemetry(
+          unreadCount = count,
+          pulseMs = pulseMs,
+          context = applicationContext,
+          phoneBatteryPct = phoneBat,
+        )
       }
       "/chronocanvas/notification_pulse" -> {
         val parts = String(messageEvent.data, Charsets.UTF_8).split(":")
         val count = parts.firstOrNull()?.toIntOrNull() ?: 1
         val pulseMs = parts.getOrNull(1)?.toLongOrNull() ?: System.currentTimeMillis()
-        WatchLocalStore.updateNotificationTelemetry(count, pulseMs)
+        WatchLocalStore.updateNotificationTelemetry(
+          unreadCount = count,
+          pulseMs = pulseMs,
+          context = applicationContext,
+        )
       }
       "/chronocanvas/request_status" -> {
         scope.launch { WatchStatusReporter.publishStatusToPhone(applicationContext) }
       }
       "/chronocanvas/force_refresh" -> {
         WatchLocalStore.initialize(applicationContext)
-        scope.launch { WatchStatusReporter.publishStatusToPhone(applicationContext) }
+        scope.launch {
+          WatchLocalStore.pullCachedTelemetryFromDataLayer(applicationContext)
+          WatchStatusReporter.publishStatusToPhone(applicationContext)
+        }
+      }
+      "/chronocanvas/launch_home" -> {
+        WatchLocalStore.initialize(applicationContext)
+        WatchLauncherService.syncServiceState(
+          applicationContext,
+          WatchLocalStore.configState.value.launcherSettings.keepAliveHomeMode,
+        )
+        scope.launch {
+          WatchLocalStore.pullCachedTelemetryFromDataLayer(applicationContext)
+          WatchStatusReporter.publishStatusToPhone(applicationContext)
+        }
+        runCatching {
+          startActivity(
+            Intent(applicationContext, WatchHomeActivity::class.java).apply {
+              addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            },
+          )
+        }
       }
     }
   }

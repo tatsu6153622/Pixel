@@ -6,6 +6,7 @@ import com.aistudio.chronocanvas.shared.model.BatteryProfile
 import com.aistudio.chronocanvas.shared.model.ClockStyleConfig
 import com.aistudio.chronocanvas.shared.model.ClockStyleId
 import com.aistudio.chronocanvas.shared.model.CustomWidgetExtension
+import com.aistudio.chronocanvas.shared.model.LauncherSettingsConfig
 import com.aistudio.chronocanvas.shared.model.NotificationAlertConfig
 import com.aistudio.chronocanvas.shared.model.NotificationEdgeStyle
 import com.aistudio.chronocanvas.shared.model.ShaderPresetId
@@ -43,6 +44,7 @@ class SharedEngineTest {
       clockStyle = ClockStyleConfig(
         styleId = ClockStyleId.DATA_MATRIX,
         accentColorHex = 0xFFFFB84D,
+        dateTextColorHex = 0xFFFF6B7A,
         offsetXFraction = 0.05f,
         offsetYFraction = -0.10f,
         showModelTag = false,
@@ -56,6 +58,12 @@ class SharedEngineTest {
         switchOnOffWrist = true,
         offWristShaderPreset = ShaderPresetId.PURE_OLED_CARBON,
         timeScheduleEnabled = true,
+      ),
+      launcherSettings = LauncherSettingsConfig(
+        keepAliveHomeMode = false,
+        ambientAlwaysOnEnabled = true,
+        autoLaunchOnBoot = false,
+        showOngoingWatchBadge = true,
       ),
       customExtensions = listOf(customExt),
       widgetSlots = listOf(
@@ -74,11 +82,15 @@ class SharedEngineTest {
     assertEquals(original.id, decoded.id)
     assertFalse(decoded.showAppDockButton)
     assertEquals(ClockStyleId.DATA_MATRIX, decoded.clockStyle.styleId)
+    assertEquals(0xFFFF6B7A, decoded.clockStyle.dateTextColorHex)
     assertFalse(decoded.clockStyle.showModelTag)
     assertEquals(0.05f, decoded.clockStyle.offsetXFraction, 0.001f)
     assertEquals(NotificationEdgeStyle.ORBIT_SWEEP, decoded.notificationAlert.edgeGlowStyle)
     assertTrue(decoded.wallpaperAutomation.switchOnOffWrist)
     assertTrue(decoded.wallpaperAutomation.timeScheduleEnabled)
+    assertFalse(decoded.launcherSettings.keepAliveHomeMode)
+    assertTrue(decoded.launcherSettings.ambientAlwaysOnEnabled)
+    assertFalse(decoded.launcherSettings.autoLaunchOnBoot)
     assertEquals(PLUGIN_NONE, decoded.widgetSlots.first().pluginId)
     assertEquals(0.12f, decoded.widgetSlots.first().offsetXFraction, 0.001f)
   }

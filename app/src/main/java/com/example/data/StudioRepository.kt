@@ -1,9 +1,6 @@
 package com.example.data
 
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.os.BatteryManager
 import androidx.room.Room
 import com.aistudio.chronocanvas.shared.battery.BatteryOptimizerEngine
 import com.aistudio.chronocanvas.shared.codec.WatchConfigCodec
@@ -21,6 +18,7 @@ import com.example.data.local.ChronoDatabase
 import com.example.data.local.StudioPreferences
 import com.example.data.local.SyncLogEntity
 import com.example.data.local.WatchPresetEntity
+import com.example.notifications.PhoneTelemetryHelper
 import com.example.wearsync.WatchAppStatus
 import com.example.wearsync.WearNodeInfo
 import com.example.wearsync.WearSyncManager
@@ -186,6 +184,8 @@ class StudioRepository(private val context: Context) {
 
   suspend fun sendForceRefreshToWatch(): Result<String> = wearSync.sendForceRefreshToWatch()
 
+  suspend fun sendLaunchHomeToWatch(): Result<String> = wearSync.sendLaunchHomeToWatch()
+
   suspend fun launchRemoteWatchUpdate(
     nodeId: String? = null,
     customReleaseUrl: String? = null,
@@ -224,10 +224,9 @@ class StudioRepository(private val context: Context) {
     wearSync.pushNotificationTelemetry(unreadCount, pulseMs)
   }
 
-  fun readPhoneBatteryPct(): Int {
-    val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-    val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-    val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-    return if (level >= 0 && scale > 0) ((level * 100f) / scale).toInt() else 92
+  suspend fun pushTelemetryToWatch(unreadCount: Int, pulseMs: Long, phoneBatteryPct: Int) {
+    wearSync.pushTelemetryToWatch(unreadCount, pulseMs, phoneBatteryPct)
   }
+
+  fun readPhoneBatteryPct(): Int = PhoneTelemetryHelper.readPhoneBatteryPct(context)
 }
